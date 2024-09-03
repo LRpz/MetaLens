@@ -127,131 +127,8 @@ class ImageDataset(Dataset):
         
         return image, label
 
-class ImageClassifier(pl.LightningModule):
-    def __init__(self, num_classes, encoder, learning_rate=1e-3, n_epochs=200, zero_freq=[], in_chans=4, focal_gamma=2):
-        super().__init__()
-
-        self.encoder = encoder
-        self.learning_rate = learning_rate
-        self.epochs = n_epochs
-        self.num_classes = num_classes
-        self.zero_freq = zero_freq
-        self.gamma = focal_gamma
-        self.in_chans=in_chans
-
-        self.accuracy = Accuracy(task='multilabel', num_labels=num_classes, threshold=0.5, average='macro')
-        self.f1 = F1Score(task='multilabel', num_labels=num_classes, threshold=0.5, average='macro')
-
-        self.model = timm.create_model(
-            self.encoder, 
-            in_chans=self.in_chans,
-            pretrained=False, # See impact on performance
-            num_classes=self.num_classes, 
-            drop_rate=0.5 # Does not affect negatively the performance
-            )
-
-    def forward(self, x):
-
-        # Encoder
-        x = self.model(x)
-        x = torch.sigmoid(x)
-        # MLP
-        # x = self.fc(x)
-
-        return x
-
-    def compute_metrics(self, y_hat, y):
-        """
-        Computes and logs the metrics.
-        
-        Parameters:
-        - preds: Predictions from the model.
-        - y: Ground truth labels.
-        - stage: Specifies the stage ('train' or 'val') to log the metrics accordingly.
-        """
-        acc = self.accuracy(y_hat, y)
-        f1 = self.f1(y_hat, y)
-        
-        return acc, f1
-
-    def compute_focal_loss(self, y_hat, y, alpha=.5, gamma=2):
-
-        self.alpha = torch.tensor([alpha, 1-alpha]).cuda()
-        self.gamma = gamma
-
-        BCE_loss = F.binary_cross_entropy_with_logits(y_hat, y.float(), reduction='none')
-        y = y.type(torch.long).cuda()
-        at = self.alpha.gather(0, y.data.view(-1))
-        pt = torch.exp(-BCE_loss).view(-1)
-        F_loss = at*(1-pt)**self.gamma * BCE_loss.view(-1)
-
-        return F_loss.mean()
-
-    def multilabel_focal_loss(self, y_hat, y, zero_freq, gamma):
-
-        alpha = torch.tensor(np.array([1-zero_freq, zero_freq])).cuda()
-
-        BCE_loss = F.binary_cross_entropy_with_logits(y_hat, y.float(), reduction='none').view(-1)
-        y_long = y.type(torch.long).cuda()
-
-        y_expanded = y_long.unsqueeze(2)
-        alpha_expanded = alpha.unsqueeze(0).repeat(y_expanded.size(0), 1, 1)
-        alpha_expanded = alpha_expanded.transpose(1, 2)
-        at = torch.gather(alpha_expanded, 2, y_expanded).squeeze(2).view(-1)
-
-        # at = self.alpha.gather(0, y.data.view(-1))
-
-        pt = torch.exp(-BCE_loss)
-        F_loss = at*(1-pt)**gamma * BCE_loss
-
-        return F_loss.mean()
-    
-    def training_step(self, batch):
-
-        x, y = batch
-        y_hat = self(x)
-
-        # loss = self.compute_focal_loss(y_hat, y)
-        loss = self.multilabel_focal_loss(y_hat, y, self.zero_freq, self.gamma)
-
-        acc, f1 = self.compute_metrics(y_hat, y)
-
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log(f'train_acc', acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log(f'train_f1', f1, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-
-        return loss
-
-    def validation_step(self, batch):
-        x, y = batch
-        y_hat = self(x)
-
-        # loss = self.compute_focal_loss(y_hat, y)
-        loss = self.multilabel_focal_loss(y_hat, y, self.zero_freq, self.gamma)
-
-        acc, f1 = self.compute_metrics(y_hat, y)
-
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_acc', acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_f1', f1, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-
-    def configure_optimizers(self):
-
-        optimizer = AdamW(self.parameters(), lr=self.learning_rate)#, weight_decay=5e-3)
-        # On weight decay: https://towardsdatascience.com/weight-decay-and-its-peculiar-effects-66e0aee3e7b8
-
-        scheduler = {
-            # 'scheduler': torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.train_dataloader()) * self.trainer.max_epochs),
-            # 'scheduler': ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10),
-            'scheduler': StepLR(optimizer, step_size=self.epochs//4, gamma=0.5), #gamme 0.2 leads to overfitting with mse at first reduction (start lr=1e-3)
-            'monitor': 'val_loss',
-            'name': 'step_lr'
-        }
-
-        return [optimizer], [scheduler]
-
 class ImageRegressor(pl.LightningModule):
-    def __init__(self, num_classes, metabolite_weights=False, learning_rate=1e-3, n_epochs=200, encoder='mit_b5', in_chans=3):
+    def __init__(self, num_classes, metabolite_weights=False, learning_rate=1e-3, n_epochs=200, encoder='resnet152', in_chans=4):
         super().__init__()
 
         if encoder == 'mit_b5': 
@@ -262,7 +139,6 @@ class ImageRegressor(pl.LightningModule):
             in_channels = in_chans
 
         self.model = smp.DeepLabV3Plus(
-        # self.model = smp.Unet(
             encoder_name=encoder, 
             encoder_weights=weights, 
             in_channels=in_channels, 
@@ -395,7 +271,7 @@ class ImageRegressor(pl.LightningModule):
         scheduler = {
             # 'scheduler': torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.train_dataloader()) * self.trainer.max_epochs),
             # 'scheduler': ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10),
-            'scheduler': StepLR(optimizer, step_size=self.epochs//4, gamma=0.5), #gamme 0.2 leads to overfitting with mse at first reduction (start lr=1e-3)
+            'scheduler': StepLR(optimizer, step_size=self.epochs//4, gamma=0.5), #gamma 0.2 leads to overfitting with mse at first reduction (start lr=1e-3)
             'monitor': 'val_loss',
             'name': 'step_lr'
         }
@@ -450,70 +326,6 @@ def get_loaders(folder_path, annotations, metabolites, batch_size, train_annotat
 
     return train_dataloader, val_dataloader, annotations
 
-def train_classifier(folder_path, model_path, batch_size, learning_rate, epochs, encoder, transform_collection, in_chans, focal_gamma, test_size=0.33, metabolite_oi=None):
-
-    annotations = pd.read_csv(os.path.join(folder_path, 'ion_intensities.csv'))
-    train_annotations, val_annotations = train_test_split(annotations, test_size=test_size, random_state=42)
-
-    if metabolite_oi is not None: 
-        metabolites = metabolite_oi
-    else: 
-        metabolites = np.array(annotations.drop('filename', axis=1).columns)
-
-    hard_transform, transform, post_transform = transform_collection
-
-    train_dataloader, val_dataloader, annotations = get_loaders(
-        folder_path, 
-        annotations, 
-        metabolites, 
-        batch_size, 
-        train_annotations, 
-        val_annotations, 
-        hard_transform, 
-        transform, 
-        post_transform,
-        task='classification'
-        )
-
-    # Compute zero frequencies for each labels
-    zero_freq = []
-    for column in metabolites:
-        count_zeros = (annotations[column] == 0).sum()
-        count_ones = (annotations[column] > 0).sum()
-        zero_freq.append(count_zeros / (count_zeros + count_ones))
-
-    zero_freq = np.clip(zero_freq, 0.1, 1) # clip to avoid completely outweighting the non-0 inflated distributions
-
-    model = ImageClassifier(
-        num_classes=len(metabolites), 
-        n_epochs=epochs, 
-        encoder=encoder, 
-        learning_rate=learning_rate, 
-        zero_freq=zero_freq, 
-        in_chans=in_chans)
-
-    logger_dirname = f'{encoder}_{learning_rate}_bs_{batch_size}_epochs_{epochs}_gamma_{focal_gamma}'
-
-    # Create the trainer with the checkpoint callback
-    logger = TensorBoardLogger(
-        save_dir=model_path, 
-        name=logger_dirname
-        )
-
-        # Define the checkpoint callback
-    checkpoint_callback = ModelCheckpoint(
-        monitor='val_f1',
-        dirpath=os.path.join(model_path, logger_dirname), 
-        filename='{epoch:02d}-{val_loss:.4f}-{val_f1:.4f}-{val_acc:.4f}',
-        save_top_k=1, 
-        mode='max'
-    )
-
-    trainer = pl.Trainer(max_epochs=epochs, callbacks=[checkpoint_callback], logger=logger)
-    trainer.fit(model, train_dataloader, val_dataloader)
-
-    return model, trainer
-
 def train_regressor(folder_path, model_path, batch_size, learning_rate, epochs, encoder, transform_collection, in_chans, test_size=0.33, metabolite_oi=None):
 
     annotations = pd.read_csv(os.path.join(folder_path, 'ion_intensities.csv'))
@@ -522,7 +334,7 @@ def train_regressor(folder_path, model_path, batch_size, learning_rate, epochs, 
     if metabolite_oi is not None: 
         metabolites = metabolite_oi
 
-    train_annotations, val_annotations = train_test_split(df_normalized, test_size=test_size, random_state=42)
+    train_annotations, val_annotations = train_test_split(df_normalized, test_size=test_size, random_state=42) # for reproducibility
 
     hard_transform, transform, post_transform = transform_collection
 
@@ -564,12 +376,6 @@ def train_regressor(folder_path, model_path, batch_size, learning_rate, epochs, 
     return model, trainer
 
 def load_regressor(checkpoint_path, num_classes, encoder, in_chans):
-    # model = ImageRegressor.load_from_checkpoint(checkpoint_path, num_classes=num_classes, encoder=encoder)
     model = ImageRegressor.load_from_checkpoint(checkpoint_path, num_classes=num_classes, encoder=encoder, in_chans=in_chans)
-    model.eval()
-    return model
-
-def load_classifier(checkpoint_path, num_classes, encoder, in_chans):
-    model = ImageClassifier.load_from_checkpoint(checkpoint_path, num_classes=num_classes, encoder=encoder, in_chans=in_chans)
     model.eval()
     return model
