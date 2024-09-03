@@ -8,9 +8,8 @@ This repository contains the codebase for the paper titled [**"Inferring super-r
 3. [Training Data Preparation](#training-data-preparation)
 4. [Model Training](#model-training)
 5. [Model Evaluation](#model-evaluation)
-6. [Pretrained Models](#pretrained-models)
-7. [License](#license)
-8. [Acknowledgements](#acknowledgements)
+6. [License](#license)
+7. [Acknowledgements](#acknowledgements)
 
 ## Introduction
 
@@ -94,10 +93,6 @@ To evaluate a model on a dataset (e.g., `F1`), use the following command:
 ```bash
 python MetaLens/dl/eval.py F1 MetaLens/models/pretrained_model.ckpt
 ```
-
-## Pretrained Models
-
-A pretrained model is available for direct use and can be downloaded [here](https://drive.google.com/file/d/1zB2kM12xB-YBJfFVMYVYYJX0sStCj2v9/view?usp=drive_link). Place it in the `MetaLens/models` directory for usage in inference or fine-tuning.
 
 ## License
 
