@@ -90,10 +90,10 @@ python MetaLens/dl/train.py MetaLens/data/training_data MetaLens/models
 
 ## Model Evaluation
 
-To evaluate a model on a dataset (e.g., `F1`), use the following command:
+To evaluate a model on a dataset (e.g., `eval_dataset.tif`, download [here](https://drive.google.com/file/d/177lS781WwD5fI_8kZPsMweXTIWiKExyj/view?usp=drive_link) and place in the `MetaLens/data` directory), use the following command:
 
 ```bash
-python MetaLens/dl/eval.py F1 MetaLens/models/pretrained_model.ckpt
+python MetaLens/dl/eval.py MetaLens/data/eval_dataset.tif MetaLens/models/pretrained_model.ckpt
 ```
 
 ## License
