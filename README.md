@@ -25,6 +25,8 @@ conda activate MetaLens
 pip install -r MetaLens/requirements.txt
 ```
 
+**Note:** A CUDA-capable machine with a GPU having more than 16GB of RAM is strongly recommended for both training and evaluation tasks. The expected runtime for training is approximately 2 hours, while evaluation can take up to 12 hours.
+
 ## Training Data Preparation
 
 The training data necessary for model development can be obtained and prepared as follows:
