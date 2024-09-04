@@ -75,7 +75,7 @@ python MetaLens/preprocessing/make_training_patches.py F1
 
 ## Model Training
 
-To train the model, you can either use the pretrained model or train a new model:
+You can either use the pretrained model or train a new model:
 
 ### Using Pretrained Model
 
