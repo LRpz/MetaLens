@@ -7,7 +7,7 @@ This repository contains the codebase for the paper titled [**"Inferring super-r
 2. [Setup](#setup)
 3. [Training Data Preparation](#training-data-preparation)
 4. [Model Training](#model-training)
-5. [Model Evaluation](#model-evaluation)
+5. [Model Inference](#model-evaluation)
 6. [License](#license)
 7. [Acknowledgements](#acknowledgements)
 
@@ -88,7 +88,7 @@ To train the model, you can either use the pretrained model or train a new model
 python MetaLens/dl/train.py MetaLens/data/training_data MetaLens/models
 ```
 
-## Model Evaluation
+## Model Inference
 
 To evaluate a model on a dataset (e.g., `eval_dataset.tif`, download [here](https://drive.google.com/file/d/177lS781WwD5fI_8kZPsMweXTIWiKExyj/view?usp=drive_link) and place in the `MetaLens/data` directory), use the following command:
 
